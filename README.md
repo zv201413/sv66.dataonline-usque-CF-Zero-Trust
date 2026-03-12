@@ -1,61 +1,74 @@
-# usque Cloudflare Zero Trust Proxy
+# usque + GOST Cloudflare Zero Trust 代理项目
 
-这是一个利用 `usque` 项目在受限 Linux 环境下通过 MASQUE 协议接入 Cloudflare Zero Trust (Teams) 的项目模板。
+本项目专为受限 Linux 环境（无 Root 权限、低内存、无标准网络工具）设计。通过 `usque` 实现 MASQUE 协议接入 Cloudflare，并使用 `gost` 提供加密入口，确保连接安全。
 
-## 目录结构
-- `setup.sh`: 自动安装环境并编译 `usque`。
-- `manage.sh`: 注册与启动管理脚本。
-- `config.json`: 存储配置信息（运行后自动生成）。
+## 1. 准备工作
 
-## 快速开始
+### 获取二进制文件
+由于受限主机内存较小，建议直接使用编译好的二进制文件：
+1. 从 `usque_1.4.2_linux_amd64.zip` 中提取 `usque` 文件。
+2. 上传到主机的项目目录，并重命名为 `usque-bin`。
+3. 赋予执行权限：`chmod +x usque-bin`
 
-### 1. 获取 Zero Trust 令牌 (JWT)
+### 安装 GOST
+运行安装脚本下载并准备 `gost`：
+```bash
+./install_gost.sh
+```
 
-你可以通过以下两种方式之一获取令牌：
+---
 
-#### 方法 A：通过 Zero Trust 控制台（推荐）
-1. 访问 [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)。
-2. 进入 **Settings** -> **WARP Client**（或 **Devices** -> **Enrollment**）。
-3. 找到 **Bulk Enrollment**，点击 **Generate Token**。
-4. 复制生成的以 `eyJ` 开头的长字符串。
+## 2. 获取 Zero Trust 令牌 (JWT)
 
-#### 方法 B：通过浏览器控制台（手动方式）
-1. 在浏览器访问：`https://<你的团队域名>.cloudflareaccess.com/warp`。
-2. 完成身份验证。
-3. 在认证成功的“Success”页面，按下 `F12` 打开开发者工具，点击 **Console**（控制台）。
-4. 输入并执行以下命令：
+**注意：令牌有效期极短，获取后请立即执行注册命令。**
+
+1. 访问：`https://<你的团队名>.cloudflareaccess.com/warp`
+2. 完成邮箱验证登录。
+3. 看到 "Success" 页面后，按下 `F12` 打开控制台 (Console)。
+4. 如果提示“禁止粘贴”，请手动输入 `允许粘贴` (或 `allow pasting`) 并回车。
+5. 执行以下命令获取 Token：
    ```javascript
    console.log(document.querySelector("meta[http-equiv='refresh']").content.split("=")[2])
    ```
-5. 复制输出的令牌字符串。
 
-### 2. 环境准备与编译
-运行以下命令安装 Go 语言环境并编译项目：
+---
+
+## 3. 注册与启动
+
+### 注册设备 (仅需一次)
 ```bash
-chmod +x setup.sh manage.sh
-./setup.sh
+./manage.sh register <你的TOKEN>
 ```
+**如果提示 401 Unauthorized：**
+- 令牌已过期：请重新刷新浏览器页面并再次执行获取 Token 的 JS 代码。
+- 策略未生效：请检查 Zero Trust 后台 **Settings -> Devices -> Enrollment** 里的规则是否包含了你的邮箱。
 
-### 3. 注册设备 (仅需一次)
-将你获取的令牌填入：
-```bash
-./manage.sh register <你的JWT令牌>
-```
-
-### 4. 启动代理
-启动 SOCKS5 代理（默认端口 1080）：
+### 启动服务
 ```bash
 ./manage.sh start
 ```
 
-## 代理信息
-- **类型**: SOCKS5
-- **地址**: `127.0.0.1`
-- **端口**: `1080`
-- **协议**: MASQUE (HTTP/3)
+### 状态检查
+```bash
+./manage.sh status
+```
 
-## 进阶配置
-你可以修改 `manage.sh` 中的启动参数，例如：
-- `-p 8080`: 更改监听端口。
-- `--dns 1.1.1.1`: 设置自定义 DNS。
-- `http-proxy`: 改为启动 HTTP 代理。
+---
+
+## 4. 客户端配置
+
+在你的手机（Shadowrocket）或电脑（Clash）中添加一个 **Shadowsocks (SS)** 节点：
+
+- **服务器地址**: 你的主机 IP
+- **端口**: `2080` (可在 manage.sh 修改)
+- **加密方式**: `aes-256-gcm`
+- **密码**: `SecurePass123` (建议在 manage.sh 中修改)
+
+---
+
+## 5. 原理解析
+
+1. **入口加密 (你 <-> 主机)**：通过 `gost` 提供的 Shadowsocks 隧道，防止 SOCKS5 明文流量被运营商拦截。
+2. **中转 (主机内)**：`gost` 将流量解密后转发到本地 `1080` 端口。
+3. **出口隧道 (主机 <-> Cloudflare)**：`usque` 接收流量，通过 **MASQUE (HTTP/3)** 协议将其封装并发送至 Cloudflare 全球边缘节点。
+4. **落地**：流量从 Cloudflare 节点流出，实现代理上网。
