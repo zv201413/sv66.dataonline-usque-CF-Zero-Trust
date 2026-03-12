@@ -10,10 +10,24 @@
 ## 快速开始
 
 ### 1. 获取 Zero Trust 令牌 (JWT)
+
+你可以通过以下两种方式之一获取令牌：
+
+#### 方法 A：通过 Zero Trust 控制台（推荐）
 1. 访问 [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)。
-2. 进入 **Settings** -> **Downloads**。
+2. 进入 **Settings** -> **WARP Client**（或 **Devices** -> **Enrollment**）。
 3. 找到 **Bulk Enrollment**，点击 **Generate Token**。
-4. 复制生成的 **Token** (JWT)。
+4. 复制生成的以 `eyJ` 开头的长字符串。
+
+#### 方法 B：通过浏览器控制台（手动方式）
+1. 在浏览器访问：`https://<你的团队域名>.cloudflareaccess.com/warp`。
+2. 完成身份验证。
+3. 在认证成功的“Success”页面，按下 `F12` 打开开发者工具，点击 **Console**（控制台）。
+4. 输入并执行以下命令：
+   ```javascript
+   console.log(document.querySelector("meta[http-equiv='refresh']").content.split("=")[2])
+   ```
+5. 复制输出的令牌字符串。
 
 ### 2. 环境准备与编译
 运行以下命令安装 Go 语言环境并编译项目：
