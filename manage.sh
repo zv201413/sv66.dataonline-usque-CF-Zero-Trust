@@ -9,12 +9,22 @@ AUTH_FILE=".proxy_auth"
 # 基础安全配置
 SS_METHOD="aes-256-gcm"
 
-# 获取或生成持久化的随机密码
+# 获取或生成持久化的随机密码 (增强兼容版)
 get_or_create_password() {
-    if [ -f "$AUTH_FILE" ]; then
+    if [ -f "$AUTH_FILE" ] && [ -s "$AUTH_FILE" ]; then
         cat "$AUTH_FILE"
     else
-        local pass=$(uuidgen)
+        local pass
+        if command -v uuidgen &> /dev/null; then
+            pass=$(uuidgen)
+        elif [ -r /proc/sys/kernel/random/uuid ]; then
+            pass=$(cat /proc/sys/kernel/random/uuid)
+        else
+            # 最后的保底手段
+            pass=$(date +%s%N | md5sum | head -c 32)
+        fi
+        # 确保密码不为空
+        if [ -z "$pass" ]; then pass="DefaultSecurePass123"; fi
         echo "$pass" > "$AUTH_FILE"
         echo "$pass"
     fi
@@ -44,56 +54,53 @@ start_interactive() {
         echo "           sv66 自动化 & 交互式启动器           "
         echo "-----------------------------------------------"
         echo "当前外网 IP: $PUB_IP"
-        echo "提示: 建议使用 35001-35999 之间的端口"
-        read -p "请输入内部通信端口 (建议 35801): " INT_PORT
-        read -p "请输入外部加密端口 (建议 35998): " PUB_PORT
+        read -p "请输入内部通信端口 (建议 35001-35999 范围内): " INT_PORT
+        read -p "请输入外部加密端口 (建议 35001-35999 范围内): " PUB_PORT
         
         if [ "$INT_PORT" == "$PUB_PORT" ]; then
-            echo "❌ 错误: 端口不能相同！"
+            echo "❌ 错误: 两个端口不能相同！"
             continue
         fi
 
         echo "正在初始化环境..."
         stop_services
         chmod +x "$BINARY" "$GOST" 2>/dev/null
+        rm -f usque.log gost.log
         
-        # 1. 尝试启动 usque
+        # 1. 启动 usque
         echo "尝试启动 usque (后端隧道)..."
         nohup $BINARY socks --port $INT_PORT --bind 127.0.0.1 --config "$CONFIG_FILE" > usque.log 2>&1 &
         echo $! > $PID_USQUE
         
-        echo "等待 usque 建立 TLS 隧道 (5秒)..."
         sleep 5
         if grep -qi "handshake failure" usque.log; then
-            echo "❌ 严重错误: TLS 握手失败 (CRYPTO_ERROR 0x128)！"
-            echo "提示: 这通常是因为 config.json 中的 私钥/ID/Token 不配套。"
+            echo "❌ 严重错误: TLS 握手失败！请检查 config.json 是否有效。"
             stop_services && exit 1
         fi
         
         if ! is_running $PID_USQUE; then
-            echo "❌ 失败: usque 无法启动，请查看 usque.log。"
+            echo "❌ 失败: usque 无法启动。"
             stop_services && continue
         fi
         echo "✅ usque 隧道连接成功！"
 
-        # 2. 尝试启动 GOST
+        # 2. 启动 GOST
         echo "尝试启动 GOST (Shadowsocks 加密入口)..."
         nohup $GOST -L "ss://$SS_METHOD:$SS_PASS@:$PUB_PORT" -F "socks5://127.0.0.1:$INT_PORT" > gost.log 2>&1 &
         echo $! > $PID_GOST
         
         sleep 2
         if ! is_running $PID_GOST; then
-            echo "❌ 失败: GOST 启动失败，可能端口 $PUB_PORT 无权限或被占用。"
+            echo "❌ 失败: GOST 启动失败。请检查端口是否被占用。"
             stop_services && continue
         fi
 
-        # 生成节点链接
-        local auth_b64=$(echo -n "$SS_METHOD:$SS_PASS" | base64)
+        # 生成节点链接 (确保 Base64 干净)
+        local auth_b64=$(echo -n "$SS_METHOD:$SS_PASS" | base64 | tr -d '\n\r')
         local ss_link="ss://$auth_b64@$PUB_IP:$PUB_PORT#Vietnam-MASQUE"
 
         echo "-----------------------------------------------"
         echo "🎉 代理节点已上线！"
-        echo "端口: $PUB_PORT"
         echo "密码: $SS_PASS"
         echo "节点链接 (直接复制到软件):"
         echo -e "\033[32m$ss_link\033[0m"
@@ -115,7 +122,7 @@ case "$1" in
         is_running $PID_GOST && echo "gost: 运行中" || echo "gost: 已停止" ;;
     new-pass)
         rm -f "$AUTH_FILE"
-        echo "旧密码已清除，下次启动将生成新密码。" ;;
+        echo "密码已重置，下次启动将生成新密码。" ;;
     *)
         echo "用法: ./manage.sh {register|start|stop|status|new-pass}" ;;
 esac

@@ -1,54 +1,84 @@
-# usque + GOST Cloudflare Zero Trust 代理项目 (自动化版)
+# usque + GOST Cloudflare Zero Trust 代理项目
 
-本项目专为 sv66 等受限 Linux 环境优化，支持自动获取 IP、随机 UUID 密码生成以及交互式自检逻辑。
+这是一个专为 sv66 (Serv00) 等受限 Linux 环境设计的代理部署方案。通过 `usque` 接入 Cloudflare MASQUE 网络，并结合 `gost` 提供安全的 Shadowsocks 入口。
 
-## 1. 核心改进 (Build v3.0)
-- **动态 IP 识别**: 脚本启动时会自动探测主机的公网 IP，并生成完整的节点链接。
-- **随机安全密码**: 弃用硬编码密码，首次运行自动生成 UUID 随机密码并保存至 `.proxy_auth`。
-- **交互式自检**: 实时监控 `usque` 的 TLS 握手状态，若私钥不匹配（TLS 0x128 错误）会立即拦截。
-- **一键切换**: 运行 `./manage.sh new-pass` 可随时重置随机密码。
+## 1. 快速部署步骤
 
-## 2. 节点信息
-**Shadowsocks 链接**:
-启动成功后，脚本会直接输出以 `ss://` 开头的彩色链接。
+在你的远程主机终端中直接执行以下命令进行初始化：
 
-- **协议**: Shadowsocks (SS)
-- **加密方式**: `aes-256-gcm`
-- **认证**: UUID 随机生成 (持久化)
+```bash
+# 下载安装脚本并赋予权限
+curl -L https://raw.githubusercontent.com/zv201413/usque-Cloudflare-Zero-Trust-Proxy/main/setup.sh -o setup.sh
+curl -L https://raw.githubusercontent.com/zv201413/usque-Cloudflare-Zero-Trust-Proxy/main/manage.sh -o manage.sh
+chmod +x setup.sh manage.sh
 
----
-
-## 3. 配置文件 (config.json) 与风险说明
-
-### 关于 ping0.cc 的“风险值”
-Cloudflare WARP 的出口 IP 属于公共数据中心，且被大量用户共享，因此常被风控系统标记为 “VPN/Proxy” 类型（高风险）。这并不影响正常上网使用，仅代表 IP 属于非家庭宽带。
-
-### 手动配置建议
-如果你有一套从其它地方获取的“可用配置”，请确保 **整套替换** 以下字段：
-- `private_key` (必须是 DER 格式)
-- `id` (设备 ID)
-- `access_token` (认证 Token)
-- `ipv6` (对应的隧道内部地址)
-**仅修改私钥会导致握手失败。**
+# 运行初始化环境 (自动下载 usque 和 gost 二进制文件)
+./setup.sh
+```
 
 ---
 
-## 4. 快速部署步骤
-1. **上传文件**: 确保 `usque-bin` 已在当前目录。
-2. **初始化**: `chmod +x *.sh usque-bin gost`（若无 gost 运行 `./install_gost.sh`）。
-3. **注册**: `./manage.sh register <TOKEN>`（自动生成配套配置）。
-4. **启动**: `./manage.sh start`。
-   - 脚本会显示当前探测到的 IP。
-   - 输入你选择的两个端口。
-   - 复制生成的 `ss://` 链接即可使用。
+## 2. 获取 Zero Trust 令牌 (JWT)
+
+这是最关键的一步，用于将你的主机作为合法设备接入 Cloudflare 团队。
+
+1. **访问认证页面**：在浏览器打开 `https://<你的团队名>.cloudflareaccess.com/warp`。
+2. **完成登录**：输入邮箱并填入收到的验证码。
+3. **获取令牌**：
+   - 登录成功后，页面会显示 **Success**。
+   - 按下 `F12` 键打开开发者工具，点击 **Console (控制台)**。
+   - 如果系统提示禁止粘贴，请输入 `允许粘贴` 并按回车。
+   - 复制并运行以下代码：
+     ```javascript
+     console.log(document.querySelector("meta[http-equiv='refresh']").content.split("=")[2])
+     ```
+   - 控制台会输出一串以 `eyJ...` 开头的极长字符串，**请立即复制**（有效期通常仅 1 分钟）。
+
+---
+
+## 3. 注册与启动服务
+
+### 第一步：注册设备 (仅需一次)
+将上一步获取的令牌填入：
+```bash
+./manage.sh register <你复制的令牌>
+```
+*如果提示 401 Unauthorized，说明令牌已过期，请刷新浏览器重新获取。*
+
+### 第二步：交互式启动
+```bash
+./manage.sh start
+```
+- **内部端口**: 建议输入 `35001 - 35999` 之间的一个数字（如 `35801`）。
+- **外部端口**: 建议输入 `35001 - 35999` 之间的另一个数字（如 `35998`）。
+- **自检逻辑**: 脚本会自动检查端口是否被占用以及 TLS 握手是否成功。
+
+### 第三步：获取节点链接
+启动成功后，屏幕会输出绿色的 `ss://` 链接。将其直接复制并导入 v2rayN、Shadowrocket 或 Clash 即可使用。
+
+---
+
+## 4. 常见问题排查 (Q&A)
+
+*   **Q: 为什么生成的链接导入 v2rayN 后报错？**
+    *   A: 可能是密码生成失败。运行 `./manage.sh new-pass` 重置密码，然后重新 `./manage.sh start`。
+*   **Q: 为什么 ping0.cc 显示我的 IP 风险高？**
+    *   A: Cloudflare WARP 的 IP 属于数据中心类别，这是正常现象。只要能正常访问 Google/YouTube 即可，不影响使用。
+*   **Q: 端口总是提示 Address already in use？**
+    *   A: sv66 是共享环境，很多端口已被其他用户占用。请尝试 `35001 - 35999` 之间的随机数字。
 
 ---
 
 ## 5. 自动维护 (Crontab)
-建议添加计划任务，脚本会自动跳过已运行的进程：
+为了防止进程被系统杀掉，建议添加定时守护：
 ```bash
+crontab -e
+# 添加以下行 (请根据实际路径修改)
 */10 * * * * cd /home/zvtdcomi/ && ./manage.sh start << 'EOF'
 35801
 35998
 EOF
 ```
+
+## 声明
+本项目基于 [Diniboy1123/usque](https://github.com/Diniboy1123/usque) 核心构建。
