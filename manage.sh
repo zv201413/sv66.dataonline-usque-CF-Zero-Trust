@@ -5,6 +5,8 @@ PID_USQUE="usque.pid"
 PID_GOST="gost.pid"
 CONFIG_FILE="config.json"
 AUTH_FILE=".proxy_auth"
+USQUE_LOG="usque.log"
+GOST_LOG="gost.log"
 
 # 基础安全配置
 SS_METHOD="aes-256-gcm"
@@ -20,11 +22,9 @@ get_or_create_password() {
         elif [ -r /proc/sys/kernel/random/uuid ]; then
             pass=$(cat /proc/sys/kernel/random/uuid)
         else
-            # 最后的保底手段
             pass=$(date +%s%N | md5sum | head -c 32)
         fi
-        # 确保密码不为空
-        if [ -z "$pass" ]; then pass="DefaultSecurePass123"; fi
+        [ -z "$pass" ] && pass="DefaultSecurePass123"
         echo "$pass" > "$AUTH_FILE"
         echo "$pass"
     fi
@@ -41,8 +41,30 @@ is_running() {
 }
 
 stop_services() {
-    [ -f $PID_USQUE ] && kill $(cat $PID_USQUE) 2>/dev/null && rm -f $PID_USQUE
-    [ -f $PID_GOST ] && kill $(cat $PID_GOST) 2>/dev/null && rm -f $PID_GOST
+    [ -f "$PID_USQUE" ] && { kill $(cat "$PID_USQUE") 2>/dev/null; rm -f "$PID_USQUE"; }
+    [ -f "$PID_GOST" ] && { kill $(cat "$PID_GOST") 2>/dev/null; rm -f "$PID_GOST"; }
+}
+
+# 使用 GOST 预探测端口可用性
+check_port() {
+    local port=$1
+    local name=$2
+    echo "正在预检测 $name 端口 $port..."
+    
+    # 尝试启动一个极简监听
+    timeout 2s "$GOST" -L ":$port" > .port_check.log 2>&1 &
+    local probe_pid=$!
+    sleep 1.5
+    
+    if grep -qiE "address already in use|bind: permission denied" .port_check.log; then
+        kill $probe_pid 2>/dev/null
+        rm -f .port_check.log
+        return 1
+    fi
+    
+    kill $probe_pid 2>/dev/null
+    rm -f .port_check.log
+    return 0
 }
 
 start_interactive() {
@@ -54,48 +76,56 @@ start_interactive() {
         echo "           sv66 自动化 & 交互式启动器           "
         echo "-----------------------------------------------"
         echo "当前外网 IP: $PUB_IP"
-        read -p "请输入内部通信端口 (建议 35001-35999 范围内): " INT_PORT
-        read -p "请输入外部加密端口 (建议 35001-35999 范围内): " PUB_PORT
+        read -p "请输入内部通信端口 (建议 35001-35999): " INT_PORT
+        read -p "请输入外部加密端口 (建议 35001-35999): " PUB_PORT
         
-        if [ "$INT_PORT" == "$PUB_PORT" ]; then
-            echo "❌ 错误: 两个端口不能相同！"
+        [ "$INT_PORT" == "$PUB_PORT" ] && { echo "❌ 错误: 端口不能相同！"; continue; }
+
+        # 端口预检
+        if ! check_port "$INT_PORT" "内部"; then
+            echo "❌ 失败: 内部端口 $INT_PORT 已被占用，请更换。"
+            continue
+        fi
+        if ! check_port "$PUB_PORT" "外部"; then
+            echo "❌ 失败: 外部端口 $PUB_PORT 已被占用，请更换。"
             continue
         fi
 
-        echo "正在初始化环境..."
+        echo "正在初始化环境并启动..."
         stop_services
         chmod +x "$BINARY" "$GOST" 2>/dev/null
-        rm -f usque.log gost.log
+        rm -f "$USQUE_LOG" "$GOST_LOG"
         
         # 1. 启动 usque
         echo "尝试启动 usque (后端隧道)..."
-        nohup $BINARY socks --port $INT_PORT --bind 127.0.0.1 --config "$CONFIG_FILE" > usque.log 2>&1 &
-        echo $! > $PID_USQUE
+        nohup "$BINARY" socks --port "$INT_PORT" --bind 127.0.0.1 --config "$CONFIG_FILE" > "$USQUE_LOG" 2>&1 &
+        echo $! > "$PID_USQUE"
         
-        sleep 5
-        if grep -qi "handshake failure" usque.log; then
-            echo "❌ 严重错误: TLS 握手失败！请检查 config.json 是否有效。"
-            stop_services && exit 1
+        sleep 4
+        if grep -qi "handshake failure" "$USQUE_LOG"; then
+            echo "❌ 严重错误: TLS 握手失败！请检查 config.json。"
+            stop_services; exit 1
         fi
         
-        if ! is_running $PID_USQUE; then
-            echo "❌ 失败: usque 无法启动。"
-            stop_services && continue
+        if ! is_running "$PID_USQUE"; then
+            echo "❌ 失败: usque 无法启动。日志最后两行："
+            tail -n 2 "$USQUE_LOG"
+            stop_services; continue
         fi
         echo "✅ usque 隧道连接成功！"
 
         # 2. 启动 GOST
-        echo "尝试启动 GOST (Shadowsocks 加密入口)..."
-        nohup $GOST -L "ss://$SS_METHOD:$SS_PASS@:$PUB_PORT" -F "socks5://127.0.0.1:$INT_PORT" > gost.log 2>&1 &
-        echo $! > $PID_GOST
+        echo "尝试启动 GOST (加密入口)..."
+        nohup "$GOST" -L "ss://$SS_METHOD:$SS_PASS@:$PUB_PORT" -F "socks5://127.0.0.1:$INT_PORT" > "$GOST_LOG" 2>&1 &
+        echo $! > "$PID_GOST"
         
         sleep 2
-        if ! is_running $PID_GOST; then
-            echo "❌ 失败: GOST 启动失败。请检查端口是否被占用。"
-            stop_services && continue
+        if ! is_running "$PID_GOST"; then
+            echo "❌ 失败: GOST 启动失败。请检查日志 $GOST_LOG。"
+            stop_services; continue
         fi
 
-        # 生成节点链接 (确保 Base64 干净)
+        # 生成节点链接
         local auth_b64=$(echo -n "$SS_METHOD:$SS_PASS" | base64 | tr -d '\n\r')
         local ss_link="ss://$auth_b64@$PUB_IP:$PUB_PORT#Vietnam-MASQUE"
 
@@ -109,68 +139,19 @@ start_interactive() {
     done
 }
 
-start_socks_only() {
-    local PUB_IP=$(get_public_ip)
-    while true; do
-        echo "==============================================="
-        echo "           sv66 SOCKS5 模式 (明文)              "
-        echo "-----------------------------------------------"
-        echo "警告: 此模式不加密，仅建议在内网或临时测试使用。"
-        echo "当前外网 IP: $PUB_IP"
-        read -p "请输入 SOCKS5 监听端口 (建议 35001-35999): " SOCKS_PORT
-        SOCKS_PORT=${SOCKS_PORT:-35801}
-
-        echo "正在初始化环境..."
-        stop_services
-        chmod +x "$BINARY" 2>/dev/null
-        rm -f usque.log
-        
-        # 尝试通过 devil 开放端口
-        if command -v devil &> /dev/null; then
-            devil port add tcp $SOCKS_PORT &> /dev/null
-        fi
-
-        echo "尝试启动 usque (直连模式)..."
-        nohup $BINARY socks --port $SOCKS_PORT --bind 0.0.0.0 --config "$CONFIG_FILE" > usque.log 2>&1 &
-        echo $! > $PID_USQUE
-        
-        sleep 5
-        if grep -qi "handshake failure" usque.log; then
-            echo "❌ 严重错误: TLS 握手失败！"
-            stop_services && exit 1
-        fi
-        
-        if ! is_running $PID_USQUE; then
-            echo "❌ 失败: 端口 $SOCKS_PORT 可能被占用。"
-            stop_services && continue
-        fi
-
-        echo "-----------------------------------------------"
-        echo "🎉 SOCKS5 代理已上线！"
-        echo "地址: $PUB_IP"
-        echo "端口: $SOCKS_PORT"
-        echo "提示: 无需密码，协议请选择 SOCKS5"
-        echo "-----------------------------------------------"
-        break
-    done
-}
-
 case "$1" in
     register)
         chmod +x "$BINARY" 2>/dev/null
-        $BINARY register --jwt "$2" --accept-tos ;;
+        "$BINARY" register --jwt "$2" --accept-tos ;;
     start)
         start_interactive ;;
-    start-socks)
-        start_socks_only ;;
     stop)
         stop_services && echo "已停止。" ;;
     status)
-        is_running $PID_USQUE && echo "usque: 运行中" || echo "usque: 已停止"
-        is_running $PID_GOST && echo "gost: 运行中" || echo "gost: 已停止" ;;
+        is_running "$PID_USQUE" && echo "usque: 运行中" || echo "usque: 已停止"
+        is_running "$PID_GOST" && echo "gost: 运行中" || echo "gost: 已停止" ;;
     new-pass)
-        rm -f "$AUTH_FILE"
-        echo "密码已重置，下次启动将生成新密码。" ;;
+        rm -f "$AUTH_FILE" && echo "密码已重置。" ;;
     *)
-        echo "用法: ./manage.sh {register|start|start-socks|stop|status|new-pass}" ;;
+        echo "用法: ./manage.sh {register|start|stop|status|new-pass}" ;;
 esac
