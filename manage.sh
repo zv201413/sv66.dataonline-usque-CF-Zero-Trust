@@ -36,6 +36,13 @@ get_public_ip() {
     echo "$ip"
 }
 
+# 获取服务器地理位置 (国家)
+get_location() {
+    local country=$(curl -s -m 3 "http://ip-api.com/line?fields=country" || echo "Unknown")
+    # 清理换行符
+    echo "$country" | tr -d '\n\r'
+}
+
 is_running() {
     [ -f "$1" ] && ps -p $(cat "$1") > /dev/null 2>&1
 }
@@ -43,6 +50,20 @@ is_running() {
 stop_services() {
     [ -f "$PID_USQUE" ] && { kill $(cat "$PID_USQUE") 2>/dev/null; rm -f "$PID_USQUE"; }
     [ -f "$PID_GOST" ] && { kill $(cat "$PID_GOST") 2>/dev/null; rm -f "$PID_GOST"; }
+}
+
+# 验证端口是否在监听
+verify_listening() {
+    local port=$1
+    if command -v netstat > /dev/null 2>&1; then
+        netstat -tuln | grep -q ":$port " && return 0
+    elif command -v ss > /dev/null 2>&1; then
+        ss -tuln | grep -q ":$port " && return 0
+    else
+        # 如果都没有工具，根据进程存活情况判断 (不完全准确但有用)
+        return 0
+    fi
+    return 1
 }
 
 # 使用 GOST 预探测端口可用性
@@ -70,12 +91,13 @@ check_port() {
 start_interactive() {
     local SS_PASS=$(get_or_create_password)
     local PUB_IP=$(get_public_ip)
+    local LOCATION=$(get_location)
 
     while true; do
         echo "==============================================="
         echo "           sv66 交互式自检启动器               "
         echo "-----------------------------------------------"
-        echo "当前外网 IP: $PUB_IP"
+        echo "当前外网 IP: $PUB_IP ($LOCATION)"
         read -p "请输入内部通信端口 (建议 35001-35999): " INT_PORT
         read -p "请输入外部加密端口 (建议 35001-35999): " PUB_PORT
         
@@ -96,6 +118,12 @@ start_interactive() {
         chmod +x "$BINARY" "$GOST" 2>/dev/null
         rm -f "$USQUE_LOG" "$GOST_LOG"
         
+        # 尝试通过 devil 开放端口 (针对 Serv00 等环境)
+        if command -v devil &> /dev/null; then
+            echo "正在尝试通过 devil 开放端口 $PUB_PORT..."
+            devil port add tcp "$PUB_PORT" &> /dev/null
+        fi
+
         # 1. 启动 usque
         echo "尝试启动 usque 后端..."
         nohup "$BINARY" socks --port "$INT_PORT" --bind 127.0.0.1 --config "$CONFIG_FILE" > "$USQUE_LOG" 2>&1 &
@@ -104,14 +132,12 @@ start_interactive() {
         sleep 4
         if grep -qi "handshake failure" "$USQUE_LOG"; then
             echo "❌ 严重错误: TLS 握手失败！请重新 register 获取 Token。"
-            stop_services
-            exit 1
+            stop_services; exit 1
         fi
         
         if ! is_running "$PID_USQUE"; then
             echo "❌ 失败: usque 启动异常，请查看 $USQUE_LOG"
-            stop_services
-            continue
+            stop_services; continue
         fi
         echo "✅ usque 隧道连接成功！"
 
@@ -123,13 +149,20 @@ start_interactive() {
         sleep 2
         if ! is_running "$PID_GOST"; then
             echo "❌ 失败: GOST 启动失败。请更换外部端口。"
-            stop_services
-            continue
+            stop_services; continue
+        fi
+
+        # 最终验证反馈
+        echo "正在验证端口状态..."
+        if verify_listening "$PUB_PORT"; then
+            echo "✅ 端口 $PUB_PORT 正在监听。"
+        else
+            echo "⚠️  警告: 端口 $PUB_PORT 似乎未开启监听。如果无法连接，请手动检查防火墙。"
         fi
 
         # 生成节点链接
         local auth_b64=$(echo -n "$SS_METHOD:$SS_PASS" | base64 | tr -d '\n\r')
-        local ss_link="ss://$auth_b64@$PUB_IP:$PUB_PORT#Vietnam-MASQUE"
+        local ss_link="ss://$auth_b64@$PUB_IP:$PUB_PORT#${LOCATION}-MASQUE"
 
         echo "-----------------------------------------------"
         echo "🎉 所有服务已成功绑定并运行！"
@@ -137,6 +170,7 @@ start_interactive() {
         echo "节点链接 (彩色显示，直接复制):"
         echo -e "\033[32m$ss_link\033[0m"
         echo "-----------------------------------------------"
+        echo "提示: 如果仍然无法连接，请确认服务商面板已放行 $PUB_PORT 端口。"
         break
     done
 }
