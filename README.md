@@ -1,4 +1,4 @@
-# usque + GOST Cloudflare Zero Trust 代理项目
+# sv66.dataonline-usque-CF-Zero-Trust
 
 这是一个专为 sv66 (Serv00) 等受限 Linux 环境设计的代理部署方案。通过 `usque` 接入 Cloudflare MASQUE 网络，并结合 `gost` 提供安全的 Shadowsocks 入口。
 
@@ -8,12 +8,9 @@
 
 ```bash
 # 下载安装脚本并赋予权限
-curl -L https://raw.githubusercontent.com/zv201413/usque-Cloudflare-Zero-Trust-Proxy/main/setup.sh -o setup.sh
-curl -L https://raw.githubusercontent.com/zv201413/usque-Cloudflare-Zero-Trust-Proxy/main/manage.sh -o manage.sh
+curl -L https://raw.githubusercontent.com/zv201413/sv66.dataonline-usque-CF-Zero-Trust/main/setup.sh -o setup.sh
+curl -L https://raw.githubusercontent.com/zv201413/sv66.dataonline-usque-CF-Zero-Trust/main/manage.sh -o manage.sh
 chmod +x setup.sh manage.sh
-
-# 运行初始化环境 (自动下载 usque 和 gost 二进制文件)
-./setup.sh
 ```
 
 ---
@@ -27,7 +24,7 @@ chmod +x setup.sh manage.sh
 3. **获取令牌**：
    - 登录成功后，页面会显示 **Success**。
    - 按下 `F12` 键打开开发者工具，点击 **Console (控制台)**。
-   - 如果系统提示禁止粘贴，请输入 `允许粘贴`或 `allow pasting` 并按回车。
+   - 如果系统提示禁止粘贴，请输入 `允许粘贴` 并按回车。
    - 复制并运行以下代码：
      ```javascript
      console.log(document.querySelector("meta[http-equiv='refresh']").content.split("=")[2])
