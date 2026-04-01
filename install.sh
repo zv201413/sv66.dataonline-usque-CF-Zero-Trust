@@ -42,7 +42,7 @@ if [ ! -f "manage.sh" ]; then
     chmod +x manage.sh
 fi
 
-# 交互式输入令牌
+# 交互式输入令牌（支持管道执行）
 echo ""
 echo "获取 Zero Trust 令牌的步骤:"
 echo "1. 访问 https://<团队名>.cloudflareaccess.com/warp"
@@ -51,7 +51,14 @@ echo "3. 在 Success 页面按 F12 打开控制台"
 echo "4. 执行: console.log(document.querySelector(\"meta[http-equiv='refresh']\").content.split(\"=\")[2])"
 echo "5. 复制输出的 eyJ... 长字符串"
 echo ""
-read -p "请输入 Zero Trust 令牌: " TOKEN
+
+# 从终端读取输入（兼容管道模式）
+if [ -t 0 ]; then
+    read -p "请输入 Zero Trust 令牌: " TOKEN
+else
+    echo -e "${YELLOW}[提示]正在读取令牌...${NC}"
+    read -p "请输入 Zero Trust 令牌: " TOKEN < /dev/tty
+fi
 
 if [[ ! "$TOKEN" =~ ^eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*$ ]]; then
     echo -e "${RED}令牌格式无效！${NC}"
