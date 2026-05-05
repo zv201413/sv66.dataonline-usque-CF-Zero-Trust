@@ -5,7 +5,7 @@
 ## 一键安装使用
 
 ```bash
-curl -L https://raw.githubusercontent.com/zv201413/usque-CF-Zero-Trust/main/install.sh | bash
+curl -L https://raw.githubusercontent.com/zv201413/usque-CF-Zero-Trust/master/install.sh | bash
 ```
 
 运行后只需输入 Zero Trust 令牌，其他全部自动完成。
