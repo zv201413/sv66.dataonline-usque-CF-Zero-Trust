@@ -129,6 +129,33 @@ cd usque-CFZT
 cat usque-CFZT/.proxy_auth
 ```
 
+**Q: 没有看到节点链接，如何手动生成？**
+如果错过初始输出，可手动拼接。步骤：
+
+```bash
+cd usque-CFZT
+
+# 1. 获取密码
+PASS=$(cat .proxy_auth)
+
+# 2. 获取服务器公网 IP
+IP=$(curl -s https://ifconfig.me)
+
+# 3. 获取 gost 端口（正在监听的端口）
+PORT=$(ss -tlnp | grep gost | grep -oP ':[0-9]+' | tail -1 | tr -d ':')
+
+# 4. 拼接节点链接
+METHOD="aes-256-gcm"
+AUTH_B64=$(echo -n "$METHOD:$PASS" | base64 | tr -d '\n\r')
+LINK="ss://$AUTH_B64@$IP:$PORT#Manual-MASQUE"
+
+echo "节点链接: $LINK"
+echo "密码: $PASS"
+echo "端口: $PORT"
+```
+
+或者直接查看 gost.log 的启动输出，里面也会记录端口。
+
 ## 声明
 
 仅供技术研究，请遵守当地法律法规。
