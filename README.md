@@ -14,18 +14,6 @@ curl -L https://raw.githubusercontent.com/zv201413/usque-CF-Zero-Trust/master/in
 3. 分配端口并启动服务
 4. **显示代理节点链接**（直接复制使用）
 
-## 工作原理
-
-```
-用户设备                    你的服务器                    Cloudflare
-                                                          
-  代理客户端 ──> gost (SS) ──> usque ──> MASQUE 隧道 ──> 出口
-            (随机端口)      (随机端口)       (加密)
-```
-
-- **usque-bin**: Cloudflare MASQUE 隧道客户端
-- **gost**: 将 Shadowsocks 流量转发到 usque
-
 ## 获取令牌 (Token)
 
 1. 访问 `https://<团队名>.cloudflareaccess.com/warp` 完成验证
