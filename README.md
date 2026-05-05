@@ -124,7 +124,7 @@ cat usque-CFZT/.proxy_auth
 cd usque-CFZT
 ./manage.sh link
 ```
-这会显示当前的节点链接、密码、端口和 IP。
+这会显示当前的节点链接（IPv6 地址会自动添加方括号）、密码、端口和 IP。
 
 ## 声明
 

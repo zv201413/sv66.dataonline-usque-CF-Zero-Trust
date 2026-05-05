@@ -181,6 +181,16 @@ start_interactive() {
     done
 }
 
+# 格式化 IP (IPv6 需要方括号)
+format_ip() {
+    local ip=$1
+    if [[ "$ip" == *":"* ]]; then
+        echo "[$ip]"
+    else
+        echo "$ip"
+    fi
+}
+
 # 生成节点链接
 generate_link() {
     if [ ! -f "$AUTH_FILE" ]; then
@@ -190,6 +200,7 @@ generate_link() {
     
     local PASS=$(cat "$AUTH_FILE")
     local PUB_IP=$(get_public_ip)
+    local FORMATTED_IP=$(format_ip "$PUB_IP")
     
     local PORT
     if [ -f "$PID_GOST" ] && ps -p $(cat "$PID_GOST") > /dev/null 2>&1; then
@@ -204,7 +215,7 @@ generate_link() {
     fi
     
     local auth_b64=$(echo -n "$SS_METHOD:$PASS" | base64 | tr -d '\n\r')
-    local ss_link="ss://$auth_b64@$PUB_IP:$PORT#MASQUE"
+    local ss_link="ss://$auth_b64@$FORMATTED_IP:$PORT#MASQUE"
     
     echo "==============================================="
     echo "节点链接 (直接复制):"
