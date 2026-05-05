@@ -181,6 +181,41 @@ start_interactive() {
     done
 }
 
+# 生成节点链接
+generate_link() {
+    if [ ! -f "$AUTH_FILE" ]; then
+        echo "错误: 未找到密码文件，请先运行 ./manage.sh start"
+        return 1
+    fi
+    
+    local PASS=$(cat "$AUTH_FILE")
+    local PUB_IP=$(get_public_ip)
+    
+    local PORT
+    if [ -f "$PID_GOST" ] && ps -p $(cat "$PID_GOST") > /dev/null 2>&1; then
+        PORT=$(ss -tlnp 2>/dev/null | grep "$(cat $PID_GOST)" | grep -oP ':[0-9]+' | head -1 | tr -d ':')
+    else
+        PORT=$(ss -tlnp 2>/dev/null | grep gost | grep -oP ':[0-9]+' | head -1 | tr -d ':')
+    fi
+    
+    if [ -z "$PORT" ]; then
+        echo "错误: 无法获取 gost 端口，请确保服务正在运行"
+        return 1
+    fi
+    
+    local auth_b64=$(echo -n "$SS_METHOD:$PASS" | base64 | tr -d '\n\r')
+    local ss_link="ss://$auth_b64@$PUB_IP:$PORT#MASQUE"
+    
+    echo "==============================================="
+    echo "节点链接 (直接复制):"
+    echo -e "\033[32m$ss_link\033[0m"
+    echo "-----------------------------------------------"
+    echo "密码: $PASS"
+    echo "端口: $PORT"
+    echo "IP:   $PUB_IP"
+    echo "==============================================="
+}
+
 case "$1" in
     register)
         chmod +x "$BINARY" 2>/dev/null
@@ -192,8 +227,10 @@ case "$1" in
     status)
         is_running "$PID_USQUE" && echo "usque: 运行中" || echo "usque: 已停止"
         is_running "$PID_GOST" && echo "gost: 运行中" || echo "gost: 已停止" ;;
+    link)
+        generate_link ;;
     new-pass)
         rm -f "$AUTH_FILE" && echo "密码已重置。" ;;
     *)
-        echo "用法: ./manage.sh {register|start|stop|status|new-pass}" ;;
+        echo "用法: ./manage.sh {register|start|stop|status|link|new-pass}" ;;
 esac
