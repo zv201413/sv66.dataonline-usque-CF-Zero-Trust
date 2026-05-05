@@ -15,6 +15,69 @@ TARGET_DIR="usque-CFZT"
 mkdir -p "$TARGET_DIR"
 cd "$TARGET_DIR"
 
+# === 新增: 检查并清理旧进程 ===
+cleanup_old_processes() {
+    echo -e "${YELLOW}[检查] 检测现有进程...${NC}"
+    
+    # 清理残留的 gost 进程 (端口检测)
+    for pid_file in usque.pid gost.pid; do
+        if [ -f "$pid_file" ]; then
+            old_pid=$(cat "$pid_file" 2>/dev/null)
+            if [ -n "$old_pid" ] && ps -p "$old_pid" > /dev/null 2>&1; then
+                echo -e "${YELLOW}[清理] 停止旧进程 PID=$old_pid${NC}"
+                kill "$old_pid" 2>/dev/null
+                sleep 1
+            fi
+            rm -f "$pid_file"
+        fi
+    done
+    
+    # 清理可能残留的 gost 端口进程 (同一目录下的)
+    pkill -f "\./gost -L" 2>/dev/null || true
+    pkill -f "./usque-bin" 2>/dev/null || true
+    sleep 1
+}
+
+# 检查是否已有服务运行
+check_existing() {
+    if [ -f "usque.pid" ] && ps -p $(cat usque.pid) > /dev/null 2>&1; then
+        return 0  # 运行中
+    fi
+    if pgrep -f "./usque-bin" > /dev/null 2>&1; then
+        return 0  # 运行中
+    fi
+    return 1  # 未运行
+}
+
+# 如果已有服务运行，询问用户
+if check_existing; then
+    echo -e "${YELLOW}[警告] 检测到已有服务运行中${NC}"
+    echo "当前进程:"
+    ps aux | grep -E "(gost|usque-bin)" | grep -v grep || echo "  (无)"
+    echo ""
+    echo "选项:"
+    echo "  1. 停止旧进程并重新部署 (推荐)"
+    echo "  2. 查看当前状态"
+    echo "  3. 退出"
+    read -p "请选择 [1-3]: " choice
+    
+    case "$choice" in
+        1)
+            cleanup_old_processes
+            echo -e "${GREEN}[OK] 已清理旧进程${NC}"
+            ;;
+        2)
+            echo "查看日志: cat usque.log / cat gost.log"
+            echo "管理命令: ./manage.sh status"
+            exit 0
+            ;;
+        *)
+            echo "退出"
+            exit 0
+            ;;
+    esac
+fi
+
 # 下载组件
 echo "正在下载必要组件..."
 if [ ! -f "gost" ]; then
