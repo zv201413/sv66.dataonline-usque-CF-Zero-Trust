@@ -3,7 +3,7 @@ BINARY="./usque-bin"
 GOST="./gost"
 PID_USQUE="usque.pid"
 PID_GOST="gost.pid"
-CONFIG_FILE="config.json"
+CONFIG_FILE="${CONFIG_FILE:-config.json}"
 AUTH_FILE=".proxy_auth"
 USQUE_LOG="usque.log"
 GOST_LOG="gost.log"
@@ -225,8 +225,27 @@ generate_link() {
 case "$1" in
     register)
         chmod +x "$BINARY" 2>/dev/null
-        "$BINARY" register --jwt "$2" --accept-tos ;;
+        shift
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --config) shift; CONFIG_FILE="$1" ;;
+                *) JWT="$1" ;;
+            esac
+            shift
+        done
+        if [ -n "$JWT" ]; then
+            "$BINARY" register --jwt "$JWT" --accept-tos
+        else
+            echo "用法: ./manage.sh register [--config <path>] <token>"
+        fi ;;
     start)
+        shift
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --config) shift; CONFIG_FILE="$1" ;;
+            esac
+            shift
+        done
         start_interactive ;;
     stop)
         stop_services && echo "已停止。" ;;
@@ -238,5 +257,13 @@ case "$1" in
     new-pass)
         rm -f "$AUTH_FILE" && echo "密码已重置。" ;;
     *)
-        echo "用法: ./manage.sh {register|start|stop|status|link|new-pass}" ;;
+        echo "用法: ./manage.sh {register|start|stop|status|link|new-pass}"
+        echo ""
+        echo "选项:"
+        echo "  --config <path>   指定配置文件路径 (默认: config.json)"
+        echo ""
+        echo "示例:"
+        echo "  ./manage.sh start                        使用默认 config.json"
+        echo "  ./manage.sh start --config ./config.json  指定配置文件"
+        echo "  CONFIG_FILE=./backup.json ./manage.sh start  通过环境变量指定" ;;
 esac
