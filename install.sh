@@ -142,26 +142,27 @@ else
     echo -e "${GREEN}✓ 设备已注册${NC}"
 fi
 
-# 自动选择端口
+# 手动选择端口
 echo ""
-echo "正在自动配置端口..."
-get_port() {
-    local port=$((35000 + RANDOM % 1000))
-    while ! timeout 1s ./gost -L ":$port" > .check.log 2>&1 &
-    do
-        kill $! 2>/dev/null
-        port=$((35000 + RANDOM % 1000))
-    done
-    sleep 0.5
-    kill $! 2>/dev/null
-    rm -f .check.log
-    echo $port
-}
+echo "===== 端口配置 ====="
+while true; do
+    read -p "请输入内部通信端口 (建议 35001-35999): " INT_PORT
+    read -p "请输入外部加密端口 (建议 35001-35999): " PUB_PORT
 
-INT_PORT=$(get_port)
-PUB_PORT=$(get_port)
-while [ "$PUB_PORT" = "$INT_PORT" ]; do
-    PUB_PORT=$(get_port)
+    [ "$INT_PORT" == "$PUB_PORT" ] && { echo -e "${RED}错误: 端口不能相同！${NC}"; continue; }
+
+    # 用 ss 检查端口是否已被占用（不 spawn 额外 gost 进程）
+    if command -v ss &> /dev/null; then
+        if ss -tuln 2>/dev/null | grep -q ":$INT_PORT "; then
+            echo -e "${RED}内部端口 $INT_PORT 已被占用${NC}"
+            continue
+        fi
+        if ss -tuln 2>/dev/null | grep -q ":$PUB_PORT "; then
+            echo -e "${RED}外部端口 $PUB_PORT 已被占用${NC}"
+            continue
+        fi
+    fi
+    break
 done
 
 # 开放端口

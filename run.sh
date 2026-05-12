@@ -29,27 +29,6 @@ get_pass() {
     fi
 }
 
-check_port() {
-    local port=$1
-    timeout 2s "$GOST" -L ":$port" > .check.log 2>&1 &
-    local pid=$!
-    sleep 1
-    if grep -qiE "address already in use|bind" .check.log; then
-        kill $pid 2>/dev/null
-        return 1
-    fi
-    kill $pid 2>/dev/null
-    return 0
-}
-
-get_port() {
-    local base=$(shuf -i 35001-35999 -n 1)
-    while ! check_port $base; do
-        base=$(shuf -i 35001-35999 -n 1)
-    done
-    echo $base
-}
-
 if [ ! -f "$BINARY" ] || [ ! -f "$GOST" ]; then
     log "首次运行，正在下载必要组件..."
     ./setup.sh
@@ -78,13 +57,29 @@ else
     log "✓ 设备已注册"
 fi
 
-PUB_PORT=$(get_port)
-INT_PORT=$(get_port)
-while [ "$PUB_PORT" = "$INT_PORT" ]; do
-    INT_PORT=$(get_port)
+echo ""
+echo "===== 端口配置 ====="
+while true; do
+    read -p "请输入内部通信端口 (建议 35001-35999): " INT_PORT
+    read -p "请输入外部加密端口 (建议 35001-35999): " PUB_PORT
+
+    [ "$INT_PORT" == "$PUB_PORT" ] && { echo -e "${RED}错误: 端口不能相同！${NC}"; continue; }
+
+    # 用 ss 快速检查端口是否已被占用（不 spawn 额外进程）
+    if command -v ss &> /dev/null; then
+        if ss -tuln 2>/dev/null | grep -q ":$INT_PORT "; then
+            echo -e "${RED}内部端口 $INT_PORT 已被占用${NC}"
+            continue
+        fi
+        if ss -tuln 2>/dev/null | grep -q ":$PUB_PORT "; then
+            echo -e "${RED}外部端口 $PUB_PORT 已被占用${NC}"
+            continue
+        fi
+    fi
+    break
 done
 
-log "自动分配端口: 外部=$PUB_PORT, 内部=$INT_PORT"
+log "手动配置端口: 外部=$PUB_PORT, 内部=$INT_PORT"
 
 if command -v devil &>/dev/null; then
     log "正在申请开放端口 $PUB_PORT..."
@@ -134,4 +129,4 @@ echo "密码: $PASS"
 echo "状态: ./manage.sh status"
 echo "停止: ./manage.sh stop"
 echo "=================================================="
-rm -f .check.log
+

@@ -49,6 +49,9 @@ is_running() {
 stop_services() {
     [ -f "$PID_USQUE" ] && { kill $(cat "$PID_USQUE") 2>/dev/null; rm -f "$PID_USQUE"; }
     [ -f "$PID_GOST" ] && { kill $(cat "$PID_GOST") 2>/dev/null; rm -f "$PID_GOST"; }
+    # 兜底清理：杀光残留的 gost/usque 进程（防止探测残留）
+    pkill -f "$GOST" 2>/dev/null || true
+    pkill -f "$BINARY" 2>/dev/null || true
 }
 
 # 验证端口是否在监听 (增加 /proc/net/tcp 基础自检)
@@ -66,24 +69,16 @@ verify_listening() {
     return 1
 }
 
-# 使用 GOST 预探测端口可用性
+# 检查端口是否已被占用（用 ss，不 spawn 额外进程）
 check_port() {
     local port=$1
     local name=$2
-    echo "正在探测 $name 端口 $port 的可用性..."
-    
-    timeout 2s "$GOST" -L ":$port" > .port_check.log 2>&1 &
-    local probe_pid=$!
-    sleep 1.5
-    
-    if grep -qiE "address already in use|bind: permission denied" .port_check.log; then
-        kill $probe_pid 2>/dev/null
-        rm -f .port_check.log
-        return 1
+    if command -v ss &> /dev/null; then
+        if ss -tuln 2>/dev/null | grep -q ":$port "; then
+            echo "⚠️  $name 端口 $port 已被占用"
+            return 1
+        fi
     fi
-    
-    kill $probe_pid 2>/dev/null
-    rm -f .port_check.log
     return 0
 }
 
