@@ -248,6 +248,17 @@ case "$1" in
             shift
         done
         start_interactive ;;
+    restart|rep)
+        shift
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --config) shift; CONFIG_FILE="$1" ;;
+            esac
+            shift
+        done
+        stop_services
+        sleep 2
+        start_interactive ;;
     stop)
         stop_services && echo "已停止。" ;;
     status)
@@ -258,7 +269,7 @@ case "$1" in
     new-pass)
         rm -f "$AUTH_FILE" && echo "密码已重置。" ;;
     *)
-        echo "用法: ./manage.sh {register|start|stop|status|link|new-pass}"
+        echo "用法: ./manage.sh {register|start|stop|restart|status|link|new-pass}"
         echo ""
         echo "选项:"
         echo "  --config <path>   指定配置文件路径 (默认: config.json)"
@@ -266,5 +277,7 @@ case "$1" in
         echo "示例:"
         echo "  ./manage.sh start                        使用默认 config.json"
         echo "  ./manage.sh start --config ./config.json  指定配置文件"
+        echo "  ./manage.sh restart                      重启（停掉旧进程 + 重新启动）"
+        echo "  ./manage.sh rep                          同上（缩写）"
         echo "  CONFIG_FILE=./backup.json ./manage.sh start  通过环境变量指定" ;;
 esac
