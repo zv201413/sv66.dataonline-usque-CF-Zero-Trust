@@ -1,0 +1,20 @@
+# manifest.yaml - usque-CF-Zero-Trust
+project:
+  name: "usque-CF-Zero-Trust"
+  version: "v2.0.0"
+  description: "轻量级代理部署方案，通过 Cloudflare MASQUE + Shadowsocks 为受限 Linux 环境提供加密隧道"
+  tech_stack: ["Shell", "gost", "usque", "Cloudflare"]
+
+public_docs:
+  features: ["一键安装部署", "MASQUE 隧道加密", "Shadowsocks 加密出口", "IPv6 自动适配", "配置文件备份复用"]
+  usage_guide: "1. curl 安装脚本\n2. 获取 Zero Trust 令牌\n3. 手动配置端口\n4. 复制节点链接使用"
+
+private_knowledge:
+  dev_logs: []
+  env_mapping: []
+  architecture: []
+
+archive:
+  current_version: "v2.0.0"
+  last_update: "2026-05-13"
+  status: "active"
