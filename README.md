@@ -1,37 +1,60 @@
 # usque-CF-Zero-Trust
 
-轻量级代理部署方案，通过 Cloudflare MASQUE + Shadowsocks 为受限 Linux 环境提供加密隧道
+专为受限 Linux 环境设计的代理方案，通过 Cloudflare MASQUE + Shadowsocks 加密。
 
-**当前版本**: v2.0.0
-**技术栈**: Shell, gost, usque, Cloudflare
+## 一键安装
 
----
+```bash
+curl -L https://raw.githubusercontent.com/zv201413/usque-CF-Zero-Trust/master/install.sh | bash
+```
 
-## 🌟 核心特色
+运行后依次：输入令牌 → 输入端口 → 复制节点链接使用。
 
-- 一键安装部署
-- MASQUE 隧道加密
-- Shadowsocks 加密出口
-- IPv6 自动适配
-- 配置文件备份复用
+## 获取令牌
 
----
+1. 访问 `https://<团队名>.cloudflareaccess.com/warp` 完成验证
+2. 在 Success 页面按 **F12** → **Console**
+3. 执行:
+```javascript
+document.querySelector("meta[http-equiv='refresh']").content.split("=")[2]
+```
+4. 复制输出的 `eyJ...` 字符串
 
-## 🚀 快速开始
+## 管理命令
 
-1. curl 安装脚本
-2. 获取 Zero Trust 令牌
-3. 手动配置端口
-4. 复制节点链接使用
+```bash
+cd usque-CFZT
+```
 
----
+| 命令 | 说明 |
+|------|------|
+| `./manage.sh start` | 交互式启动（手动输入端口） |
+| `./manage.sh start --config <路径>` | 使用指定配置文件启动 |
+| `./manage.sh stop` | 停止服务 |
+| `./manage.sh restart` (或 `rep`) | 重启 |
+| `./manage.sh status` | 查看运行状态 |
+| `./manage.sh link` | 生成节点链接 |
+| `./manage.sh new-pass` | 重置 Shadowsocks 密码 |
+| `./manage.sh uninstall` (或 `clean`) | 卸载并删除所有文件 |
 
-## 🛠️ 环境映射 (Env Mapping)
+## 使用备份配置
 
-| 变量名 | 说明 | 示例 |
-|:---|:---|:---|
-| - | - | - |
+注册后保存 `config.json`，下次直接复用：
 
----
+```bash
+./manage.sh start --config ~/backup-config.json
+```
 
-**文档更新时间**: 2026-05-13
+## 自动保活
+
+```bash
+crontab -e
+*/10 * * * * cd /home/$USER/usque-CFZT && ./manage.sh stop && ./manage.sh start << 'EOF'
+35001
+35002
+EOF
+```
+
+## 声明
+
+仅供技术研究，请遵守当地法律法规。
