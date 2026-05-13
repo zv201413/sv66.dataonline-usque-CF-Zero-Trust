@@ -161,9 +161,10 @@ start_interactive() {
             echo "⚠️  注意: 进程已启动但系统自检未发现监听。这在某些 Docker 环境下是正常的。"
         fi
 
-        # 生成节点链接
+        # 生成节点链接（IPv6 自动加方括号）
         local auth_b64=$(echo -n "$SS_METHOD:$SS_PASS" | base64 | tr -d '\n\r')
-        local ss_link="ss://$auth_b64@$PUB_IP:$PUB_PORT#${LOCATION}-MASQUE"
+        local FORMATTED_IP=$(format_ip "$PUB_IP")
+        local ss_link="ss://$auth_b64@$FORMATTED_IP:$PUB_PORT#${LOCATION}-MASQUE"
 
         echo "-----------------------------------------------"
         echo "🎉 所有服务已成功启动！"

@@ -97,11 +97,11 @@ fi
 
 # 复制必要文件
 if [ ! -f "config.json" ]; then
-    curl -L "https://raw.githubusercontent.com/zv201413/usque-CF-Zero-Trust/main/config.json" -o config.json
+    curl -L "https://raw.githubusercontent.com/zv201413/usque-CF-Zero-Trust/master/config.json" -o config.json
 fi
 
 if [ ! -f "manage.sh" ]; then
-    curl -L "https://raw.githubusercontent.com/zv201413/usque-CF-Zero-Trust/main/manage.sh" -o manage.sh
+    curl -L "https://raw.githubusercontent.com/zv201413/usque-CF-Zero-Trust/master/manage.sh" -o manage.sh
     chmod +x manage.sh
 fi
 
