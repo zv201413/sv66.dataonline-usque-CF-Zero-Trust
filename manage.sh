@@ -268,8 +268,15 @@ case "$1" in
         generate_link ;;
     new-pass)
         rm -f "$AUTH_FILE" && echo "密码已重置。" ;;
+    uninstall|clean)
+        echo "正在停止服务..."
+        stop_services
+        echo "正在删除所有相关文件..."
+        rm -f "$BINARY" "$GOST" "$AUTH_FILE" *.log *.pid .check.log .port_check.log
+        echo "✅ 已卸载。目录 $(pwd) 中的相关文件已清理。"
+        echo "   如需彻底删除整个目录，手动执行: cd .. && rm -rf $(basename $(pwd))" ;;
     *)
-        echo "用法: ./manage.sh {register|start|stop|restart|status|link|new-pass}"
+        echo "用法: ./manage.sh {register|start|stop|restart|status|link|new-pass|uninstall}"
         echo ""
         echo "选项:"
         echo "  --config <path>   指定配置文件路径 (默认: config.json)"
@@ -279,5 +286,6 @@ case "$1" in
         echo "  ./manage.sh start --config ./config.json  指定配置文件"
         echo "  ./manage.sh restart                      重启（停掉旧进程 + 重新启动）"
         echo "  ./manage.sh rep                          同上（缩写）"
+        echo "  ./manage.sh uninstall                    卸载并删除所有相关文件"
         echo "  CONFIG_FILE=./backup.json ./manage.sh start  通过环境变量指定" ;;
 esac

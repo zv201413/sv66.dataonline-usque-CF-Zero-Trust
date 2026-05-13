@@ -1,0 +1,13 @@
+# Sensitive config (DO NOT commit)
+config.json
+
+# Generated files
+*.log
+*.pid
+.proxy_auth
+.check.log
+.port_check.log
+
+# Binaries
+gost
+usque-bin

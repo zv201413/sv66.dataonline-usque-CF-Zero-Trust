@@ -83,9 +83,11 @@ cd usque-CFZT
 | `./manage.sh start` | 交互式启动（手动输入内外端口） |
 | `./manage.sh start --config <路径>` | 使用指定配置文件启动 |
 | `./manage.sh stop` | 停止服务 |
+| `./manage.sh restart` (或 `rep`) | 重启（停掉旧进程后重新启动） |
 | `./manage.sh status` | 查看运行状态 |
 | `./manage.sh link` | 生成节点链接（随时可用） |
 | `./manage.sh new-pass` | 重置 Shadowsocks 密码 |
+| `./manage.sh uninstall` (或 `clean`) | 卸载并删除所有相关文件（二进制、日志、配置等） |
 
 ### 使用保存的配置文件 (--config)
 
